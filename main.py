@@ -1,14 +1,28 @@
-
-# Python program to take
-# screenshots
 from operator import countOf
 import numpy as np
 import cv2 as cv2
-from numpy.core.defchararray import count
+from cv2 import imshow
+from scipy import ndimage
+import time
 import pyautogui
-import matplotlib as plt
+from numpy.core.defchararray import count
+import matplotlib.pyplot as plt
 
-font = cv2.FONT_HERSHEY_COMPLEX
+
+# Hyperparameters ---------------------------------------------------------------------------------
+
+SCREENSHOT_ANGLE = -3.7
+
+PROGRESSBAR_RATIO = 7.185566648008215
+EPSILON_RATIO = 1.0
+
+CUPHEAD_AREA = 2129.8714588528674
+EPSILON_CUPHEAD_AREA = 500
+
+CUPHEAD_RATIO = 1.0
+EPSILON_CUPHEAD_RATIO = 0.5
+
+# Helper functions --------------------------------------------------------------------------------
 
 
 def takeScreenShot():
@@ -18,57 +32,88 @@ def takeScreenShot():
                         cv2.COLOR_RGB2BGR)
 
 
-img = cv2.imread("./fourth_phase.png")  # third_phase.png
-img = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_CUBIC)
+def adaptImage(img, display=False):
+    # Denoising the picture
+    img_denoised = cv2.fastNlMeansDenoisingColored(img, None, 20, 20, 7, 21)
 
-origin_img = img.copy()
+    # Blur the picture
+    ksize = (2, 2)
+    img_blur = cv2.blur(img_denoised, ksize)
 
-img = cv2.fastNlMeansDenoisingColored(img, None, 20, 20, 7, 21)
+    # turning the image into gray
+    img_gray = cv2.cvtColor(img_blur, cv2.COLOR_RGB2GRAY)
 
-# ksize
-ksize = (2, 2)
+    # Apply the thresholding
+    thresh = cv2.adaptiveThreshold(img_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY, 11, 2)
+    if display:
+        plt.imshow(img_denoised)
+        plt.imshow(img_blur)
+        plt.imshow(img_gray, cmap='gray')
+        plt.imshow(thresh, cmap='gray')
+        plt.show()
 
-# Using cv2.blur() method
-img_blur = cv2.blur(img, ksize)
-
-img_gray = cv2.cvtColor(img_blur, cv2.COLOR_RGB2GRAY)  # Apply the thresholding
-
-thresh = cv2.adaptiveThreshold(img_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                               cv2.THRESH_BINARY, 11, 2)
-
-
-mask = thresh  # edges
-# cv2.imshow('mask', mask)
-
-contours = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[-2]
-contours = sorted(contours, key=cv2.contourArea, reverse=True)
-print(len(contours))
-
-# 4, boss
-# 6: barre! enfin
-i = 0
-for contour in contours:
-
-    if i == 6:
-        rect = cv2.minAreaRect(contour)
-        print(rect)
-        box = cv2.boxPoints(rect)
-        print(box)
-        box = box.astype('int')
-
-        print(box)
-
-        cv2.drawContours(origin_img, [box], -1, (0, 255, 0), 3)
-        break
-    i += 1
+    return thresh
 
 
-# writing it to the disk using opencv
-# cv2.imwrite("./image1.png", takeScreenShot())
+def findProgressBar(img):
+    contours, hierarchy = cv2.findContours(
+        img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-cv2.imshow('image', img)
-a = 3
-cv2.imshow('origin', origin_img)
-#cv2.imshow('threshold', threshold)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+    new_contours = []
+
+    for cnt in contours:
+        # I have used min Area rect for better result
+        rect = cv2.minAreaRect(cnt)
+        width = rect[1][0]
+        height = rect[1][1]
+        if height == 0 or width == 0:
+            continue
+
+        ratio = width/height
+
+        if abs(ratio - PROGRESSBAR_RATIO) < EPSILON_RATIO:
+            new_contours.append(cnt)
+            break
+
+    assert len(new_contours) == 1, "more thant one contour found: found %r" % len(
+        contours)
+
+    return new_contours[0]
+
+
+def get_box_from_contour(contour):
+    rect = cv2.minAreaRect(contour)
+    box = cv2.boxPoints(rect)
+    box = box.astype('int')
+
+    return rect, box
+
+
+if __name__ == "__main__":
+    # Fetching original image
+    display = False
+
+    origin_img = cv2.imread("phase4.png")
+    height, width, channels = origin_img.shape
+
+    # rotation of the image
+    origin_img = ndimage.rotate(origin_img, SCREENSHOT_ANGLE, reshape=False)
+    if display:
+        plt.imshow(origin_img)
+        plt.show()
+
+    img = origin_img.copy()
+
+    # now we apply thresholding, bluring, etc, to the image to create a mask
+    mask = adaptImage(img)
+
+    if display:
+        plt.imshow(mask)
+        plt.show()
+
+    progressbar_contour = findProgressBar(mask)
+
+    progressbar_rect, progressbar_box = get_box_from_contour(
+        progressbar_contour)
