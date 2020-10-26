@@ -1,11 +1,10 @@
-from operator import countOf
-import numpy as np
-import cv2 as cv2
-from cv2 import imshow
-from scipy import ndimage
 import time
+
 import pyautogui
-from numpy.core.defchararray import count
+
+import cv2 as cv2
+from scipy import ndimage
+import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -84,9 +83,10 @@ def findProgressBar(img):
             new_contours.append(cnt)
             break
 
-    assert len(new_contours) == 1, "more thant one contour for progressbar found: found %r" % len(
-        contours)
-
+    if len(new_contours) != 1:
+        print("more thant one contour for progressbar found: found %r" % len(
+            contours))
+        return None
     return new_contours[0]
 
 
@@ -113,10 +113,10 @@ def findCuphead(img):
             new_contours.append(cnt)
             break
 
-    print("nombres de contours trouvés ", len(new_contours))
-
-    assert len(new_contours) == 1, "more thant one contour for cuphead found: found %r" % len(
-        contours)
+    if len(new_contours) != 1:
+        print("more thant one contour for cuphead found: found %r" % len(
+            contours))
+        return None
 
     return new_contours[0]
 
@@ -129,21 +129,15 @@ def get_box_from_contour(contour):
     return rect, box
 
 
-if __name__ == "__main__":
-    # Fetching original image
-    display = False
+def progression_pipeline(img, display=False):
+    """ 
+    take a picture as input, return progression as output
 
-    origin_img = cv2.imread("phase4.png")
-    height, width, channels = origin_img.shape
+    @param: img a opencv image
+    @param: display: boolean: whether to display intermediates pictures or not
 
-    # rotation of the image
-    origin_img = ndimage.rotate(origin_img, SCREENSHOT_ANGLE, reshape=False)
-    if display:
-        plt.imshow(origin_img)
-        plt.show()
-
-    img = origin_img.copy()
-
+    @return: int, progression, or None if an error occured
+    """
     # now we apply thresholding, bluring, etc, to the image to create a mask
     mask = adaptImage(img)
 
@@ -153,6 +147,8 @@ if __name__ == "__main__":
 
     # we get the contour of the progressbar
     progressbar_contour = findProgressBar(mask)
+    if progressbar_contour is None:
+        return None
 
     # we extract the bounding box from it
     progressbar_rect, progressbar_box = get_box_from_contour(
@@ -170,6 +166,8 @@ if __name__ == "__main__":
 
     # we get the contour of cuphead
     cuphead_contour = findCuphead(cropped_progressbar)
+    if cuphead_contour is None:
+        return None
 
     # We extract the bounding box from it
     cuphead_rect, cuphead_box = get_box_from_contour(cuphead_contour)
@@ -181,4 +179,28 @@ if __name__ == "__main__":
 
     relative_progress = cuphead_x / progressbar_w
 
-    print(int(relative_progress * 100), "%")
+    return int(relative_progress * 100)
+
+
+if __name__ == "__main__":
+    # Fetching original image
+    display = False
+
+    origin_img = cv2.imread("phase3.png")
+    height, width, channels = origin_img.shape
+
+    # rotation of the image
+    origin_img = ndimage.rotate(origin_img, SCREENSHOT_ANGLE, reshape=False)
+    if display:
+        plt.imshow(origin_img)
+        plt.show()
+
+    img = origin_img.copy()
+
+    my_timer = time.perf_counter()
+
+    progression = progression_pipeline(img, display=False)
+
+    print("done in {} s".format(time.perf_counter() - my_timer))
+
+    print(progression, "%")
