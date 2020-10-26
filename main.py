@@ -1,5 +1,5 @@
 import time
-
+import keyboard
 import pyautogui
 
 import cv2 as cv2
@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 
 # Hyperparameters ---------------------------------------------------------------------------------
+
 
 SCREENSHOT_ANGLE = -3.7
 
@@ -130,7 +131,7 @@ def get_box_from_contour(contour):
 
 
 def progression_pipeline(img, display=False):
-    """ 
+    """
     take a picture as input, return progression as output
 
     @param: img a opencv image
@@ -172,35 +173,64 @@ def progression_pipeline(img, display=False):
     # We extract the bounding box from it
     cuphead_rect, cuphead_box = get_box_from_contour(cuphead_contour)
     if display:
-        display_contour_on_img(cuphead_box, origin_img)
+        display_contour_on_img(cuphead_box, cropped_progressbar)
 
     progressbar_w = progressbar_rect[1][0]
     cuphead_x = cuphead_rect[0][0]
+    cuphead_w = cuphead_rect[1][0]
 
-    relative_progress = cuphead_x / progressbar_w
+    relative_progress = (cuphead_x + cuphead_w/2) / progressbar_w
 
     return int(relative_progress * 100)
 
 
 if __name__ == "__main__":
     # Fetching original image
-    display = False
 
-    origin_img = cv2.imread("phase3.png")
-    height, width, channels = origin_img.shape
+    mode = "TEST"
+    mode = "GAME"  # comment this line to go to test mode
+    display = True
 
-    # rotation of the image
-    origin_img = ndimage.rotate(origin_img, SCREENSHOT_ANGLE, reshape=False)
-    if display:
-        plt.imshow(origin_img)
-        plt.show()
+    if mode == "TEST":
+        origin_img = cv2.imread("phase3.png")
+        height, width, channels = origin_img.shape
 
-    img = origin_img.copy()
+        # rotation of the image
+        origin_img = ndimage.rotate(
+            origin_img, SCREENSHOT_ANGLE, reshape=False)
+        if display:
+            plt.imshow(origin_img)
+            plt.show()
 
-    my_timer = time.perf_counter()
+        img = origin_img.copy()
 
-    progression = progression_pipeline(img, display=False)
+        my_timer = time.perf_counter()
 
-    print("done in {} s".format(time.perf_counter() - my_timer))
+        progression = progression_pipeline(img, display=display)
 
-    print(progression, "%")
+        print("done in {} s".format(time.perf_counter() - my_timer))
+
+        print(progression, "%")
+
+    else:
+        while True:  # making a loop
+            time.sleep(0.16)  # pause to avoid burning the cpu
+            try:  # used try so that if user pressed other than the given key error will not be shown
+                if keyboard.is_pressed('space'):  # if key 'q' is pressed
+                    print('Space pressed, launching the program')
+                    origin_img = takeScreenShot()
+                    origin_img = ndimage.rotate(
+                        origin_img, SCREENSHOT_ANGLE, reshape=False)
+
+                    img = origin_img.copy()
+
+                    my_timer = time.perf_counter()
+
+                    progression = progression_pipeline(img, display=display)
+
+                    print("done in {} s".format(time.perf_counter() - my_timer))
+
+                    print(progression, "%")
+
+            except Exception as e:
+                pass

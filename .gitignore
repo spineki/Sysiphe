@@ -2,3 +2,4 @@
 *.jpg
 *.webp
 venv/
+.ipynb_checkpoints/
