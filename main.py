@@ -1,11 +1,13 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy import ndimage
+import cv2 as cv2
 import time
 import keyboard
 import pyautogui
-
-import cv2 as cv2
-from scipy import ndimage
-import numpy as np
-import matplotlib.pyplot as plt
+import musicalbeeps
+music_player = musicalbeeps.Player(volume=0.3,
+                                   mute_output=False)
 
 
 # Hyperparameters ---------------------------------------------------------------------------------
@@ -14,13 +16,13 @@ import matplotlib.pyplot as plt
 SCREENSHOT_ANGLE = -3.7
 
 PROGRESSBAR_RATIO = 7.185566648008215
-EPSILON_RATIO = 1.0
+EPSILON_RATIO = 0.5
 
 CUPHEAD_AREA = 2129.8714588528674
-EPSILON_CUPHEAD_AREA = 500
+EPSILON_CUPHEAD_AREA = 300
 
-CUPHEAD_RATIO = 1.0
-EPSILON_CUPHEAD_RATIO = 0.5
+CUPHEAD_RATIO = 1.2
+EPSILON_CUPHEAD_RATIO = 2
 
 # Helper functions --------------------------------------------------------------------------------
 
@@ -64,6 +66,7 @@ def adaptImage(img, display=False):
 
 
 def findProgressBar(img):
+    print("finding progressbar")
     contours, hierarchy = cv2.findContours(
         img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -91,7 +94,8 @@ def findProgressBar(img):
     return new_contours[0]
 
 
-def findCuphead(img):
+def findCuphead(img, dangerous_mode=False):
+    print("finding cuphead")
     contours, hierarchy = cv2.findContours(
         img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -99,6 +103,7 @@ def findCuphead(img):
     new_contours = []
 
     i = -1
+    print(len(contours), "contours à analyser")
     for cnt in contours:
         i += 1
         # I have used min Area rect for better result
@@ -109,17 +114,28 @@ def findCuphead(img):
         if height == 0 or width == 0:
             continue
         ratio = width/height
+
+        print(ratio, area)
+
         if abs(ratio - CUPHEAD_RATIO) < EPSILON_CUPHEAD_RATIO and abs(area - CUPHEAD_AREA) < EPSILON_CUPHEAD_AREA:
-            _, box = get_box_from_contour(contours[i])
+            print(ratio, area)
             new_contours.append(cnt)
             break
 
-    if len(new_contours) != 1:
-        print("more thant one contour for cuphead found: found %r" % len(
-            contours))
+    if len(new_contours) == 0:
+        print("no cuphead contour found")
         return None
 
-    return new_contours[0]
+    if len(new_contours) == 1:
+        print("cuphead found")
+        return new_contours[0]
+
+    if dangerous_mode:
+        print(len(contours),  " founds for cuphead, entering dangerous mode")
+        return new_contours[0]
+
+    print("more thant one contour for cuphead found: found %r" % len(contours))
+    return None
 
 
 def get_box_from_contour(contour):
@@ -130,7 +146,7 @@ def get_box_from_contour(contour):
     return rect, box
 
 
-def progression_pipeline(img, display=False):
+def progression_pipeline(img, display=False, dangerous_mode=False):
     """
     take a picture as input, return progression as output
 
@@ -160,13 +176,17 @@ def progression_pipeline(img, display=False):
 
     # no need to work with the full picture, we can safely crop the progressbar
     x, y, w, h = cv2.boundingRect(progressbar_contour)
+
+    # cropped_progressbar = mask[y:y+h, x:x+w]
     cropped_progressbar = mask[y:y+h, x:x+w]
+
     if display:
         plt.imshow(cropped_progressbar, cmap='gray')
         plt.show()
 
     # we get the contour of cuphead
-    cuphead_contour = findCuphead(cropped_progressbar)
+    cuphead_contour = findCuphead(
+        cropped_progressbar, dangerous_mode=dangerous_mode)
     if cuphead_contour is None:
         return None
 
@@ -190,6 +210,7 @@ if __name__ == "__main__":
     mode = "TEST"
     mode = "GAME"  # comment this line to go to test mode
     display = True
+    dangerous_mode = True
 
     if mode == "TEST":
         origin_img = cv2.imread("phase3.png")
@@ -218,6 +239,7 @@ if __name__ == "__main__":
             try:  # used try so that if user pressed other than the given key error will not be shown
                 if keyboard.is_pressed('space'):  # if key 'q' is pressed
                     print('Space pressed, launching the program')
+                    music_player.play_note("C", 0.2)
                     origin_img = takeScreenShot()
                     origin_img = ndimage.rotate(
                         origin_img, SCREENSHOT_ANGLE, reshape=False)
@@ -226,11 +248,20 @@ if __name__ == "__main__":
 
                     my_timer = time.perf_counter()
 
-                    progression = progression_pipeline(img, display=display)
+                    progression = progression_pipeline(
+                        img, display=display, dangerous_mode=dangerous_mode)
 
-                    print("done in {} s".format(time.perf_counter() - my_timer))
+                    if progression is None:
+                        print("An error occured, try again")
+                        music_player.play_note("Eb", 0.2)
 
-                    print(progression, "%")
+                    else:
+                        music_player.play_note("G", 0.1)
+                        music_player.play_note("G", 0.1)
+                        print("done in {} s".format(
+                            time.perf_counter() - my_timer))
+
+                        print(progression, "%")
 
             except Exception as e:
                 pass
